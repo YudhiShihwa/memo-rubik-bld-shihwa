@@ -1,496 +1,539 @@
 import React, { useState, useEffect } from 'react';
-import { Info, Settings, RefreshCw, Eye, Sparkles, Heart } from 'lucide-react';
+import { Info, Settings, RotateCcw, Eye, EyeOff, Box, Sparkles, CheckCircle2, AlertTriangle, BookOpen } from 'lucide-react';
 
-// ====================================================================
-// KAMUS PASANGAN HURUF (KATA BENDA & SUASANA INDAH, NYATA & SEJUK)
-// ====================================================================
-const pairDictionary = {
-  // Kombinasi BA, BI, DA, DI
-  'BA-DA': 'Badan',   'BA-DI': 'Batik',    'BA-PI': 'Bait',    'BA-GA': 'Bintang', 
-  'BA-SA': 'Danau',   'BA-MI': 'Bambu',   'BA-TA': 'Batu',    'BA-JA': 'Bunga',   
-  'BA-KI': 'Baskom',  'BA-NA': 'Bahtera', 'BA-LA': 'Balok',   'BI-PA': 'Bintang', 
-  'BI-SA': 'Bisikan', 'BA-BI': 'Batu',
+// --- GENERATOR SCRAMBLE WCA --- //
+const generateRandomScramble = () => {
+  const moves = ["U", "D", "L", "R", "F", "B"];
+  const modifiers = ["", "'", "2"];
+  let scramble = [];
+  let lastMove = "";
 
-  // Kombinasi DI, DA, GA, GI, TI, TA, MA, MI
-  'DI-GA': 'Dirgantara','DI-PI': 'Dermaga','DA-MI': 'Damai',   'DA-NA': 'Danau',
-  'DA-GA': 'Dermaga', 'TI-MA': 'Timah',   'GA-SA': 'Gading',  'GA-MI': 'Gamis',   
-  'GA-TA': 'Gardan',  'GA-JA': 'Gajah',   'GA-KI': 'Gamelan', 'GA-NA': 'Gading',  
-  'GA-LA': 'Gaza',    'GI-PA': 'Gitar',   'GI-SA': 'Girimukti','GI-BA': 'Gubuk',   
-  'GI-KI': 'Gitar',   'JI-GA': 'Jelita',
-
-  // Kombinasi PA, PI, SA, SI, NA, NI
-  'PI-GA': 'Pigura',  'PI-SA': 'Pita',    'PI-BA': 'Piala',   'PA-SI': 'Pasir',
-  'PA-BA': 'Papan',   'PA-SA': 'Pasar',   'PA-DI': 'Padi',    'PI-NI': 'Pinus',
-  'SA-MI': 'Samudra', 'SA-BA': 'Sabana',  'SA-GA': 'Saga',    'SI-BA': 'Sinar',   
-  'SI-PA': 'Sirup',   'SI-JI': 'Sinar',   'NA-SI': 'Nasi',    'NA-LA': 'Nala',
-
-  // Kombinasi TA, TI, JA, JI, KA, KI, LA, MA, MI
-  'TA-GA': 'Taman',   'TA-MI': 'Taman',   'JA-KI': 'Jaket',   'JA-NA': 'Jalan',
-  'LA-JA': 'Lentera', 'KI-LA': 'Kilau',   'MA-NA': 'Mahkota', 'MA-MI': 'Mawar',   
-  'MA-LI': 'Melati',  'LA-MA': 'Lampu',   'KA-LA': 'Kalam',   'MI-TA': 'Mutiara'
+  for (let i = 0; i < 20; i++) {
+    let move;
+    do {
+      move = moves[Math.floor(Math.random() * moves.length)];
+    } while (move === lastMove);
+    lastMove = move;
+    const modifier = modifiers[Math.floor(Math.random() * modifiers.length)];
+    scramble.push(move + modifier);
+  }
+  return scramble.join(" ");
 };
 
-// Helper untuk mengambil nama kata dari pasangan huruf
-function getWordFromPair(pairKey) {
-  if (pairDictionary[pairKey]) return pairDictionary[pairKey];
-  
-  let cleanKey = pairKey.replace('-', '');
-  const fallbackMap = {
-    'BADA': 'Badan',  'TIMA': 'Timah',  'DAGA': 'Dermaga', 'JIGA': 'Jelita',
-    'NASI': 'Nasi',   'PINI': 'Pinus',  'PADI': 'Padi',    'SIJI': 'Sinar',
-    'MALI': 'Melati', 'BABI': 'Batu',   'SAMI': 'Samudra', 'TAGA': 'Taman'
-  };
-  
-  return fallbackMap[cleanKey] || (cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1).toLowerCase());
-}
+// --- SKEMA HURUF EDGE (Buffer: DF / Putih-Merah) --- //
+const EDGE_LETTER_MAP = [
+  "BA", "BI", // 0, 1: UL (Kuning-Biru, Biru-Kuning)
+  "DA", "DI", // 2, 3: UB (Kuning-Orange, Orange-Kuning)
+  "GA", "GI", // 4, 5: UR (Kuning-Hijau, Hijau-Kuning)
+  "JA", "JI", // 6, 7: UF (Kuning-Merah, Merah-Kuning)
+  "KA", "KI", // 8, 9: FL (Merah-Biru, Biru-Merah)
+  "LA", "LI", // 10, 11: BL (Orange-Biru, Biru-Orange)
+  "MA", "MI", // 12, 13: BR (Orange-Hijau, Hijau-Orange)
+  "NA", "NI", // 14, 15: FR (Merah-Hijau, Hijau-Merah)
+  "PA", "PI", // 16, 17: DL (Putih-Biru, Biru-Putih)
+  "SA", "SI", // 18, 19: DB (Putih-Orange, Orange-Putih)
+  "TA", "TI", // 20, 21: DR (Putih-Hijau, Hijau-Putih)
+  null, null  // 22, 23: DF (BUFFER: Putih-Merah, Merah-Putih)
+];
 
-// ====================================================================
-// PEMBUAT CERITA TERPISAH (SEKUENSIAL & ALAMI)
-// ====================================================================
-function buildSingleStory(cycles, badgeBg, badgeText, borderCol) {
-  let flatTargets = cycles.flat();
-  if (flatTargets.length === 0) return '<span class="text-gray-400 font-medium">Sudah rapi (Solved) ✨</span>';
+// --- SKEMA HURUF CORNER (Buffer: UBL / Kuning-Oren-Biru) --- //
+const CORNER_LETTER_MAP = [
+  "GA", "GI", "GU", // 0, 1, 2: UBR (Kuning-Orange-Hijau, Hijau-Kuning-Oren, Oren-Kuning-Hijau)
+  "JA", "JI", "JU", // 3, 4, 5: UFR (Kuning-Hijau-Merah, Hijau-Merah-Kuning, Merah-Kuning-Hijau)
+  "BA", "BI", "BU", // 6, 7, 8: UFL (Kuning-Merah-Biru, Biru-Kuning-Merah, Merah-Kuning-Biru)
+  "KA", "KI", "KU", // 9, 10, 11: DFL (Putih-Merah-Biru, Biru-Merah-Putih, Merah-Biru-Putih)
+  "LA", "LI", "LU", // 12, 13, 14: DBL (Putih-Oren-Biru, Biru-Oren-Putih, Oren-Putih-Biru)
+  "MA", "MI", "MU", // 15, 16, 17: DBR (Putih-Hijau-Oren, Hijau-Oren-Putih, Oren-Hijau-Putih)
+  "NA", "NI", "NU", // 18, 19, 20: DFR (Putih-Merah-Hijau, Hijau-Merah-Putih, Merah-Hijau-Putih)
+  null, null, null // 21, 22, 23: UBL (BUFFER: Kuning-Oren-Biru)
+];
 
-  let words = [];
-  for (let i = 0; i < flatTargets.length; i += 2) {
-    if (i + 1 < flatTargets.length) {
-      words.push(getWordFromPair(`${flatTargets[i]}-${flatTargets[i+1]}`));
-    } else {
-      words.push(flatTargets[i]); // Sisa target tunggal
-    }
+// DATA TABEL KETERANGAN HURUF FOR DISPLAY
+const EDGE_GUIDE_TABLE = [
+  { sticker: "Kuning - Biru", code: "BA" }, { sticker: "Biru - Kuning", code: "BI" },
+  { sticker: "Kuning - Orange", code: "DA" }, { sticker: "Orange - Kuning", code: "DI" },
+  { sticker: "Kuning - Hijau", code: "GA" }, { sticker: "Hijau - Kuning", code: "GI" },
+  { sticker: "Kuning - Merah", code: "JA" }, { sticker: "Merah - Kuning", code: "JI" },
+  { sticker: "Merah - Biru", code: "KA" }, { sticker: "Biru - Merah", code: "KI" },
+  { sticker: "Orange - Biru", code: "LA" }, { sticker: "Biru - Orange", code: "LI" },
+  { sticker: "Orange - Hijau", code: "MA" }, { sticker: "Hijau - Orange", code: "MI" },
+  { sticker: "Merah - Hijau", code: "NA" }, { sticker: "Hijau - Merah", code: "NI" },
+  { sticker: "Putih - Biru", code: "PA" }, { sticker: "Biru - Putih", code: "PI" },
+  { sticker: "Putih - Orange", code: "SA" }, { sticker: "Orange - Putih", code: "SI" },
+  { sticker: "Putih - Hijau", code: "TA" }, { sticker: "Hijau - Putih", code: "TI" },
+];
+
+const CORNER_GUIDE_TABLE = [
+  { sticker: "Kuning - Merah - Biru", code: "BA" }, { sticker: "Biru - Kuning - Merah", code: "BI" }, { sticker: "Merah - Kuning - Biru", code: "BU" },
+  { sticker: "Kuning - Orange - Hijau", code: "GA" }, { sticker: "Hijau - Kuning - Oren", code: "GI" }, { sticker: "Oren - Kuning - Hijau", code: "GU" },
+  { sticker: "Kuning - Hijau - Merah", code: "JA" }, { sticker: "Hijau - Merah - Kuning", code: "JI" }, { sticker: "Merah - Kuning - Hijau", code: "JU" },
+  { sticker: "Putih - Merah - Biru", code: "KA" }, { sticker: "Biru - Merah - Putih", code: "KI" }, { sticker: "Merah - Biru - Putih", code: "KU" },
+  { sticker: "Putih - Oren - Biru", code: "LA" }, { sticker: "Biru - Oren - Putih", code: "LI" }, { sticker: "Oren - Putih - Biru", code: "LU" },
+  { sticker: "Putih - Hijau - Oren", code: "MA" }, { sticker: "Hijau - Oren - Putih", code: "MI" }, { sticker: "Oren - Hijau - Putih", code: "MU" },
+  { sticker: "Putih - Merah - Hijau", code: "NA" }, { sticker: "Hijau - Merah - Putih", code: "NI" }, { sticker: "Merah - Hijau - Putih", code: "NU" },
+];
+
+// KAMUS KATA PASANGAN UNTUK MEMO KALIMAT
+const WORD_DICT = {
+  "BABI": "Babi", "BADA": "Badak", "BADI": "Badi", "BAGA": "Bagas", "BAGI": "Bagi",
+  "BAJA": "Baja", "BAJI": "Baji", "BAKA": "Bakar", "BAKI": "Baki", "BALA": "Balap",
+  "BALI": "Bali", "BAMA": "Bamas", "BAMI": "Bami", "BANA": "Banan", "BANI": "Bani",
+  "BAPA": "Bapak", "BAPI": "Baping", "BASA": "Basah", "BASI": "Basi", "BATA": "Batik",
+  "BATI": "Batin", "BIDA": "Bidadari", "BIGA": "Bigas", "BIJA": "Bijak", "BIKA": "Bika",
+  "BILI": "Bilik", "BIMA": "Bima", "BINA": "Bina", "BISA": "Bisa", "BITA": "Bintang",
+  "DABA": "Dabarku", "DABI": "Dabing", "DAGA": "Dagang", "DAGI": "Daging", "DAJA": "Dajal",
+  "DAMA": "Damai", "DANI": "Danil", "DAPA": "Dapat", "DASI": "Dasi", "DATA": "Datang",
+  "GABA": "Gabah", "GAGA": "Gagah", "GAJA": "Gajah", "GAJI": "Gaji", "GALI": "Gali",
+  "GAMA": "Gamas", "GANI": "Gani", "GAPA": "Gapai", "GASI": "Gasing", "GATA": "Gatal",
+  "JAGA": "Jaga", "JAJA": "Jajak", "JAKA": "Jaksa", "JALI": "Jalin", "JAMA": "Jamu",
+  "JANI": "Janji", "JASI": "Jasmani", "JATA": "Jatah", "KABA": "Kabar", "KABI": "Kabin",
+  "KAGA": "Kagum", "KAJA": "Kajang", "KAKA": "Kakak", "KALI": "Kali", "KAMA": "Kamar",
+  "KANI": "Kanil", "KAPA": "Kapal", "KASI": "Kasih", "KATA": "Kata", "LABA": "Laba",
+  "LAGA": "Laga", "LALI": "Lali", "LAMA": "Lama", "LANI": "Lani", "LAPA": "Lapar",
+  "LATA": "Latar", "MABA": "Mabar", "MADI": "Madih", "MAJA": "Maja", "MAKA": "Makan",
+  "MALI": "Malih", "MAMA": "Mama", "MANI": "Manis", "MAPA": "Mapan", "MATA": "Mata",
+  "PAPA": "Papa", "PASI": "Pasir", "PATA": "Patah", "SABA": "Sabak", "SADI": "Sadis",
+  "SAGA": "Saga", "SAJA": "Sajak", "SALI": "Salin", "SAMA": "Sama", "SANI": "Sanak",
+  "SAPA": "Sapa", "SATA": "Satu", "SIDA": "Sidang", "SINA": "Sinar", "SISA": "Sisa",
+  "TABA": "Tabah", "TADI": "Tadi", "TAJA": "Tajam", "TAKA": "Takut", "TALI": "Tali",
+  "TAMA": "Taman", "TANI": "Tani", "TAPA": "Tapak", "TATA": "Tata", "TIDA": "Tidak",
+  "GUJU": "Guju", "BUKA": "Buka", "LAMI": "Lami", "MUNA": "Munajat", "JUMA": "Jumat"
+};
+
+const CONNECTORS = [
+  "menyinari",
+  "menghiasi",
+  "berada di dekat",
+  "memancarkan berkah ke",
+  "bersanding dengan"
+];
+
+// --- SIMULATOR PEMUTARAN KUBUS BLD REAL-TIME --- //
+const applyCycle = (arr, cycle) => {
+  const temp = arr[cycle[cycle.length - 1]];
+  for (let i = cycle.length - 1; i > 0; i--) {
+    arr[cycle[i]] = arr[cycle[i - 1]];
   }
+  arr[cycle[0]] = temp;
+};
 
-  // Penghubung lembut, singkat, dan menenangkan
-  const connectors = [
-    '✨ menyinari ✨',
-    '🌸 menghiasi 🌸',
-    '🕊️ berada di dekat 🕊️',
-    '🌟 memancarkan berkah ke 🌟',
-    '🍃 bersanding dengan 🍃'
-  ];
+const solveRealBLDMemo = (scrambleStr) => {
+  let edges = Array.from({ length: 24 }, (_, i) => i);
+  let corners = Array.from({ length: 24 }, (_, i) => i);
 
-  let sentenceElements = [];
-  for (let i = 0; i < words.length; i++) {
-    sentenceElements.push(
-      `<strong class="${badgeBg} ${badgeText} ${borderCol} px-2.5 py-0.5 rounded border font-bold">${words[i]}</strong>`
-    );
-    if (i < words.length - 1) {
-      let conn = connectors[i % connectors.length];
-      sentenceElements.push(`<span class="text-gray-600 font-medium text-xs md:text-sm mx-1">${conn}</span>`);
-    }
-  }
-
-  return sentenceElements.join(' ');
-}
-
-// ====================================================================
-// SIMULATOR BLD (STANDAR WCA: U=PUTIH, F=HIJAU)
-// ====================================================================
-function solveBLDMemo(scrambleStr) {
-  let ePos = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-  let eOri = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-  let cPos = [0, 1, 2, 3, 4, 5, 6, 7];
-  let cOri = [0, 0, 0, 0, 0, 0, 0, 0];
-
-  let faces = [];
-  for (let f = 0; f < 6; f++) {
-    for (let i = 0; i < 9; i++) faces.push(f);
-  }
-
-  const rotFace = (base) => {
-    let p = faces.slice(base, base + 9);
-    faces[base+0]=p[6]; faces[base+1]=p[3]; faces[base+2]=p[0];
-    faces[base+3]=p[7]; faces[base+4]=p[4]; faces[base+5]=p[1];
-    faces[base+6]=p[8]; faces[base+7]=p[5]; faces[base+8]=p[2];
+  const edgeMoves = {
+    "U": [[0, 2, 4, 6], [1, 3, 5, 7]],
+    "D": [[22, 20, 18, 16], [23, 21, 19, 17]],
+    "R": [[5, 13, 21, 15], [4, 12, 20, 14]],
+    "L": [[1, 9, 17, 11], [0, 8, 16, 10]],
+    "F": [[7, 14, 23, 8], [6, 15, 22, 9]],
+    "B": [[3, 10, 19, 12], [2, 11, 18, 13]]
   };
 
-  const edgeLetters = {
-    '0_0': 'BA', '0_1': 'BI', '1_0': 'DA', '1_1': 'DI',
-    '2_0': 'GA', '2_1': 'GI', '3_0': 'JA', '3_1': 'JI',
-    '4_0': 'KA', '4_1': 'KI', '5_0': 'LA', '5_1': 'LI',
-    '6_0': 'MA', '6_1': 'MI', '7_0': 'NA', '7_1': 'NI',
-    '9_0': 'PA', '9_1': 'PI', '10_0': 'SA', '10_1': 'SI',
-    '11_0': 'TA', '11_1': 'TI'
+  const cornerMoves = {
+    "U": [[21, 0, 3, 6], [22, 1, 4, 7], [23, 2, 5, 8]],
+    "D": [[9, 18, 15, 12], [11, 19, 17, 14], [10, 20, 16, 13]],
+    "R": [[1, 16, 20, 4], [0, 17, 18, 5], [2, 15, 19, 3]],
+    "L": [[7, 23, 13, 10], [6, 22, 12, 11], [8, 21, 14, 9]],
+    "F": [[5, 19, 11, 8], [3, 20, 9, 7], [4, 18, 10, 6]],
+    "B": [[22, 2, 17, 14], [21, 1, 15, 13], [23, 0, 16, 12]]
   };
 
-  const cornerLetters = {
-    '1_0': 'BA', '1_1': 'BI', '1_2': 'DA',
-    '2_0': 'DI', '2_1': 'GA', '2_2': 'GI',
-    '3_0': 'JA', '3_1': 'JI', '3_2': 'KA',
-    '4_0': 'KI', '4_1': 'LA', '4_2': 'LI',
-    '5_0': 'MA', '5_1': 'MI', '5_2': 'NA',
-    '6_0': 'NI', '6_1': 'PA', '6_2': 'PI',
-    '7_0': 'SA', '7_1': 'SI', '7_2': 'TA'
-  };
+  if (scrambleStr) {
+    const movesList = scrambleStr.trim().split(/\s+/);
+    movesList.forEach(m => {
+      if (!m) return;
+      const base = m[0];
+      const times = m.includes("2") ? 2 : m.includes("'") ? 3 : 1;
 
-  const doMove = (m) => {
-    let face = m[0];
-    let turns = m.includes("'") ? 3 : m.includes("2") ? 2 : 1;
-
-    for (let t = 0; t < turns; t++) {
-      if (face === 'U') {
-        let cp = [cPos[0], cPos[1], cPos[2], cPos[3]], co = [cOri[0], cOri[1], cOri[2], cOri[3]];
-        cPos[0] = cp[3]; cPos[1] = cp[0]; cPos[2] = cp[1]; cPos[3] = cp[2];
-        cOri[0] = co[3]; cOri[1] = co[0]; cOri[2] = co[1]; cOri[3] = co[2];
-
-        let ep = [ePos[0], ePos[1], ePos[2], ePos[3]], eo = [eOri[0], eOri[1], eOri[2], eOri[3]];
-        ePos[0] = ep[3]; ePos[1] = ep[0]; ePos[2] = ep[1]; ePos[3] = ep[2];
-        eOri[0] = eo[3]; eOri[1] = eo[0]; eOri[2] = eo[1]; eOri[3] = eo[2];
-
-        rotFace(0);
-        let tmp = [faces[45], faces[46], faces[47]];
-        faces[45]=faces[36]; faces[46]=faces[37]; faces[47]=faces[38];
-        faces[36]=faces[18]; faces[37]=faces[19]; faces[38]=faces[20];
-        faces[18]=faces[9];  faces[19]=faces[10]; faces[20]=faces[11];
-        faces[9]=tmp[0];     faces[10]=tmp[1];    faces[11]=tmp[2];
-      } else if (face === 'D') {
-        let cp = [cPos[4], cPos[5], cPos[6], cPos[7]], co = [cOri[4], cOri[5], cOri[6], cOri[7]];
-        cPos[4] = cp[3]; cPos[5] = cp[0]; cPos[6] = cp[1]; cPos[7] = cp[2];
-        cOri[4] = co[3]; cOri[5] = co[0]; cOri[6] = co[1]; cOri[7] = co[2];
-
-        let ep = [ePos[8], ePos[9], ePos[10], ePos[11]], eo = [eOri[8], eOri[9], eOri[10], eOri[11]];
-        ePos[8] = ep[3]; ePos[9] = ep[0]; ePos[10] = ep[1]; ePos[11] = ep[2];
-        eOri[8] = eo[3]; eOri[9] = eo[0]; eOri[10] = eo[1]; eOri[11] = eo[2];
-
-        rotFace(27);
-        let tmp = [faces[24], faces[25], faces[26]];
-        faces[24]=faces[42]; faces[25]=faces[43]; faces[26]=faces[44];
-        faces[42]=faces[51]; faces[43]=faces[52]; faces[44]=faces[53];
-        faces[51]=faces[15]; faces[52]=faces[16]; faces[53]=faces[17];
-        faces[15]=tmp[0];     faces[16]=tmp[1];    faces[17]=tmp[2];
-      } else if (face === 'L') {
-        let cp = [cPos[0], cPos[3], cPos[4], cPos[7]], co = [cOri[0], cOri[3], cOri[4], cOri[7]];
-        cPos[0] = cp[3]; cPos[3] = cp[0]; cPos[4] = cp[1]; cPos[7] = cp[2];
-        cOri[0] = (co[3] + 1) % 3; cOri[3] = (co[0] + 2) % 3;
-        cOri[4] = (co[1] + 1) % 3; cOri[7] = (co[2] + 2) % 3;
-
-        let ep = [ePos[3], ePos[5], ePos[11], ePos[6]], eo = [eOri[3], eOri[5], eOri[11], eOri[6]];
-        ePos[3] = ep[3]; ePos[5] = ep[0]; ePos[11] = ep[1]; ePos[6] = ep[2];
-        eOri[3] = eo[3]; eOri[5] = eo[0]; eOri[11] = eo[1]; eOri[6] = eo[2];
-
-        rotFace(36);
-        let uIdx=[0,3,6], fIdx=[18,21,24], dIdx=[27,30,33], bIdx=[53,50,47];
-        let tmp = uIdx.map(i => faces[i]);
-        uIdx.forEach((idx, i) => faces[idx] = faces[bIdx[i]]);
-        bIdx.forEach((idx, i) => faces[idx] = faces[dIdx[i]]);
-        dIdx.forEach((idx, i) => faces[idx] = faces[fIdx[i]]);
-        fIdx.forEach((idx, i) => faces[idx] = tmp[i]);
-      } else if (face === 'R') {
-        let cp = [cPos[1], cPos[2], cPos[5], cPos[6]], co = [cOri[1], cOri[2], cOri[5], cOri[6]];
-        cPos[1] = cp[3]; cPos[2] = cp[0]; cPos[5] = cp[1]; cPos[6] = cp[2];
-        cOri[1] = (co[3] + 2) % 3; cOri[2] = (co[0] + 1) % 3;
-        cOri[5] = (co[1] + 2) % 3; cOri[6] = (co[2] + 1) % 3;
-
-        let ep = [ePos[1], ePos[7], ePos[9], ePos[4]], eo = [eOri[1], eOri[7], eOri[9], eOri[4]];
-        ePos[1] = ep[3]; ePos[7] = ep[0]; ePos[9] = ep[1]; ePos[4] = ep[2];
-        eOri[1] = eo[3]; eOri[7] = eo[0]; eOri[9] = eo[1]; eOri[4] = eo[2];
-
-        rotFace(9);
-        let uIdx=[2,5,8], bIdx=[51,48,45], dIdx=[35,32,29], fIdx=[26,23,20];
-        let tmp = uIdx.map(i => faces[i]);
-        uIdx.forEach((idx, i) => faces[idx] = faces[fIdx[i]]);
-        fIdx.forEach((idx, i) => faces[idx] = faces[dIdx[i]]);
-        dIdx.forEach((idx, i) => faces[idx] = faces[bIdx[i]]);
-        bIdx.forEach((idx, i) => faces[idx] = tmp[i]);
-      } else if (face === 'F') {
-        let cp = [cPos[3], cPos[2], cPos[5], cPos[4]], co = [cOri[3], cOri[2], cOri[5], cOri[4]];
-        cPos[3] = cp[3]; cPos[2] = cp[0]; cPos[5] = cp[1]; cPos[4] = cp[2];
-        cOri[3] = (co[3] + 1) % 3; cOri[2] = (co[0] + 2) % 3;
-        cOri[5] = (co[1] + 1) % 3; cOri[4] = (co[2] + 2) % 3;
-
-        let ep = [ePos[2], ePos[4], ePos[8], ePos[5]], eo = [eOri[2], eOri[4], eOri[8], eOri[5]];
-        ePos[2] = ep[3]; ePos[4] = ep[0]; ePos[8] = ep[1]; ePos[5] = ep[2];
-        eOri[2] = (eo[3] + 1) % 2; eOri[4] = (eo[0] + 1) % 2;
-        eOri[8] = (eo[1] + 1) % 2; eOri[5] = (eo[2] + 1) % 2;
-
-        rotFace(18);
-        let uIdx=[6,7,8], rIdx=[9,12,15], dIdx=[29,28,27], lIdx=[44,41,38];
-        let tmp = uIdx.map(i => faces[i]);
-        uIdx.forEach((idx, i) => faces[idx] = faces[lIdx[i]]);
-        lIdx.forEach((idx, i) => faces[idx] = faces[dIdx[i]]);
-        dIdx.forEach((idx, i) => faces[idx] = faces[rIdx[i]]);
-        rIdx.forEach((idx, i) => faces[idx] = tmp[i]);
-      } else if (face === 'B') {
-        let cp = [cPos[1], cPos[0], cPos[7], cPos[6]], co = [cOri[1], cOri[0], cOri[7], cOri[6]];
-        cPos[1] = cp[3]; cPos[0] = cp[0]; cPos[7] = cp[1]; cPos[6] = cp[2];
-        cOri[1] = (co[3] + 1) % 3; cOri[0] = (co[0] + 2) % 3;
-        cOri[7] = (co[1] + 1) % 3; cOri[6] = (co[2] + 2) % 3;
-
-        let ep = [ePos[0], ePos[6], ePos[10], ePos[7]], eo = [eOri[0], eOri[6], eOri[10], eOri[7]];
-        ePos[0] = ep[3]; ePos[6] = ep[0]; ePos[10] = ep[1]; ePos[7] = ep[2];
-        eOri[0] = (eo[3] + 1) % 2; eOri[6] = (eo[0] + 1) % 2;
-        eOri[10] = (eo[1] + 1) % 2; eOri[7] = (eo[2] + 1) % 2;
-
-        rotFace(45);
-        let uIdx=[2,1,0], lIdx=[36,39,42], dIdx=[33,34,35], rIdx=[17,14,11];
-        let tmp = uIdx.map(i => faces[i]);
-        uIdx.forEach((idx, i) => faces[idx] = faces[rIdx[i]]);
-        rIdx.forEach((idx, i) => faces[idx] = faces[dIdx[i]]);
-        dIdx.forEach((idx, i) => faces[idx] = faces[lIdx[i]]);
-        lIdx.forEach((idx, i) => faces[idx] = tmp[i]);
+      for (let t = 0; t < times; t++) {
+        if (edgeMoves[base]) edgeMoves[base].forEach(cycle => applyCycle(edges, cycle));
+        if (cornerMoves[base]) cornerMoves[base].forEach(cycle => applyCycle(corners, cycle));
       }
-    }
-  };
+    });
+  }
 
-  scrambleStr.trim().split(/\s+/).forEach(doMove);
+  // TARGET EDGE
+  let edgeTargets = [];
+  let visitedEdgePieces = new Array(12).fill(false);
+  visitedEdgePieces[11] = true;
 
-  // --- TRACING EDGE (Buffer: DF / Slot 8) ---
-  let edgeCycles = [], currEdge = [];
-  let ePosCopy = [...ePos], eOriCopy = [...eOri];
-  const bufferE = 8;
+  let curBufEdge = 22;
+  let safetyEdge = 0;
+  while (safetyEdge++ < 50) {
+    let stickerInBuf = edges[curBufEdge];
+    let pieceInBuf = Math.floor(stickerInBuf / 2);
 
-  for (let step = 0; step < 30; step++) {
-    let unsolved = [];
-    for (let i = 0; i < 12; i++) {
-      if (i !== bufferE && (ePosCopy[i] !== i || eOriCopy[i] !== 0)) unsolved.push(i);
-    }
-    let p = ePosCopy[bufferE], o = eOriCopy[bufferE];
-    if (unsolved.length === 0 && p === bufferE && o === 0) {
-      if (currEdge.length > 0) edgeCycles.push(currEdge);
-      break;
-    }
-    if (p === bufferE) {
-      if (currEdge.length > 0) { edgeCycles.push(currEdge); currEdge = []; }
-      if (unsolved.length === 0) break;
-      let breakSlot = unsolved[0];
-      currEdge.push(edgeLetters[`${breakSlot}_0`] || '??');
-      let pBuf = ePosCopy[bufferE], oBuf = eOriCopy[bufferE];
-      let pTgt = ePosCopy[breakSlot], oTgt = eOriCopy[breakSlot];
-      ePosCopy[bufferE] = pTgt; eOriCopy[bufferE] = oTgt;
-      ePosCopy[breakSlot] = pBuf; eOriCopy[breakSlot] = oBuf;
+    if (pieceInBuf === 11) {
+      let breakPiece = -1;
+      for (let p = 0; p < 11; p++) {
+        let isSolved = (edges[2 * p] === 2 * p && edges[2 * p + 1] === 2 * p + 1);
+        if (!visitedEdgePieces[p] && !isSolved) {
+          breakPiece = p;
+          break;
+        }
+      }
+      if (breakPiece === -1) break;
+
+      let targetSlot = 2 * breakPiece;
+      if (EDGE_LETTER_MAP[targetSlot]) edgeTargets.push(EDGE_LETTER_MAP[targetSlot]);
+      visitedEdgePieces[breakPiece] = true;
+
+      let temp = edges[curBufEdge];
+      edges[curBufEdge] = edges[targetSlot];
+      edges[targetSlot] = temp;
     } else {
-      currEdge.push(edgeLetters[`${p}_${o}`] || '??');
-      let targetSlot = p;
-      let pBuf = ePosCopy[bufferE], oBuf = eOriCopy[bufferE];
-      let pTgt = ePosCopy[targetSlot], oTgt = eOriCopy[targetSlot];
-      ePosCopy[targetSlot] = pBuf; eOriCopy[targetSlot] = 0;
-      ePosCopy[bufferE] = pTgt; eOriCopy[bufferE] = (oTgt - oBuf + 2) % 2;
+      if (EDGE_LETTER_MAP[stickerInBuf]) edgeTargets.push(EDGE_LETTER_MAP[stickerInBuf]);
+      visitedEdgePieces[pieceInBuf] = true;
+
+      let targetSlot = stickerInBuf;
+      let temp = edges[curBufEdge];
+      edges[curBufEdge] = edges[targetSlot];
+      edges[targetSlot] = temp;
     }
   }
 
-  // --- TRACING CORNER (Buffer: UBL / Slot 0) ---
-  let cornerCycles = [], currCorner = [];
-  let cPosCopy = [...cPos], cOriCopy = [...cOri];
-  const bufferC = 0;
+  // TARGET CORNER
+  let cornerTargets = [];
+  let visitedCornerPieces = new Array(8).fill(false);
+  visitedCornerPieces[7] = true;
 
-  for (let step = 0; step < 30; step++) {
-    let unsolved = [];
-    for (let i = 1; i < 8; i++) {
-      if (cPosCopy[i] !== i || cOriCopy[i] !== 0) unsolved.push(i);
-    }
-    let p = cPosCopy[bufferC], o = cOriCopy[bufferC];
-    if (unsolved.length === 0 && p === bufferC && o === 0) {
-      if (currCorner.length > 0) cornerCycles.push(currCorner);
-      break;
-    }
-    if (p === bufferC) {
-      if (currCorner.length > 0) { cornerCycles.push(currCorner); currCorner = []; }
-      if (unsolved.length === 0) break;
-      let breakSlot = unsolved[0];
-      currCorner.push(cornerLetters[`${breakSlot}_0`] || '??');
-      let pBuf = cPosCopy[bufferC], oBuf = cOriCopy[bufferC];
-      let pTgt = cPosCopy[breakSlot], oTgt = cOriCopy[breakSlot];
-      cPosCopy[bufferC] = pTgt; cOriCopy[bufferC] = oTgt;
-      cPosCopy[breakSlot] = pBuf; cOriCopy[breakSlot] = oBuf;
+  let curBufCorner = 21;
+  let safetyCorner = 0;
+  while (safetyCorner++ < 50) {
+    let stickerInBuf = corners[curBufCorner];
+    let pieceInBuf = Math.floor(stickerInBuf / 3);
+
+    if (pieceInBuf === 7) {
+      let breakPiece = -1;
+      for (let p = 0; p < 7; p++) {
+        let isSolved = (corners[3 * p] === 3 * p && corners[3 * p + 1] === 3 * p + 1 && corners[3 * p + 2] === 3 * p + 2);
+        if (!visitedCornerPieces[p] && !isSolved) {
+          breakPiece = p;
+          break;
+        }
+      }
+      if (breakPiece === -1) break;
+
+      let targetSlot = 3 * breakPiece;
+      if (CORNER_LETTER_MAP[targetSlot]) cornerTargets.push(CORNER_LETTER_MAP[targetSlot]);
+      visitedCornerPieces[breakPiece] = true;
+
+      let temp = corners[curBufCorner];
+      corners[curBufCorner] = corners[targetSlot];
+      corners[targetSlot] = temp;
     } else {
-      currCorner.push(cornerLetters[`${p}_${o}`] || '??');
-      let targetSlot = p;
-      let pBuf = cPosCopy[bufferC], oBuf = cOriCopy[bufferC];
-      let pTgt = cPosCopy[targetSlot], oTgt = cOriCopy[targetSlot];
-      cPosCopy[targetSlot] = pBuf; cOriCopy[targetSlot] = 0;
-      cPosCopy[bufferC] = pTgt; cOriCopy[bufferC] = (oTgt - oBuf + 3) % 3;
+      if (CORNER_LETTER_MAP[stickerInBuf]) cornerTargets.push(CORNER_LETTER_MAP[stickerInBuf]);
+      visitedCornerPieces[pieceInBuf] = true;
+
+      let targetSlot = stickerInBuf;
+      let temp = corners[curBufCorner];
+      corners[curBufCorner] = corners[targetSlot];
+      corners[targetSlot] = temp;
     }
   }
 
-  const formatCycles = (cycles) => cycles.length === 0 ? 'Solved' : cycles.map(c => `(${c.join(' ')})`).join(' ');
-  const totalEdgeTargets = edgeCycles.reduce((sum, c) => sum + c.length, 0);
+  const edgePairs = [];
+  for (let i = 0; i < edgeTargets.length; i += 2) {
+    if (i + 1 < edgeTargets.length) edgePairs.push(`(${edgeTargets[i]} ${edgeTargets[i+1]})`);
+    else edgePairs.push(`(${edgeTargets[i]})`);
+  }
+
+  const cornerPairs = [];
+  for (let i = 0; i < cornerTargets.length; i += 2) {
+    if (i + 1 < cornerTargets.length) cornerPairs.push(`(${cornerTargets[i]} ${cornerTargets[i+1]})`);
+    else cornerPairs.push(`(${cornerTargets[i]})`);
+  }
+
+  const edgeStory = [];
+  for (let i = 0; i < edgeTargets.length; i += 2) {
+    const rawPair = edgeTargets[i] + (edgeTargets[i+1] || "");
+    const word = WORD_DICT[rawPair] || rawPair;
+    const conn = CONNECTORS[Math.floor(i / 2) % CONNECTORS.length];
+    edgeStory.push({ word, conn });
+  }
+
+  const cornerStory = [];
+  for (let i = 0; i < cornerTargets.length; i += 2) {
+    const rawPair = cornerTargets[i] + (cornerTargets[i+1] || "");
+    const word = WORD_DICT[rawPair] || rawPair;
+    const conn = CONNECTORS[Math.floor(i / 2) % CONNECTORS.length];
+    cornerStory.push({ word, conn });
+  }
 
   return {
-    edgesText: formatCycles(edgeCycles),
-    cornersText: formatCycles(cornerCycles),
-    edgeStory: buildSingleStory(edgeCycles, 'bg-emerald-100', 'text-emerald-900', 'border-emerald-300'),
-    cornerStory: buildSingleStory(cornerCycles, 'bg-indigo-100', 'text-indigo-900', 'border-indigo-300'),
-    hasParity: totalEdgeTargets % 2 !== 0,
-    faces: faces
+    edgeTargetsStr: edgePairs.length > 0 ? edgePairs.join(" ") : "(Selesai / Solved)",
+    cornerTargetsStr: cornerPairs.length > 0 ? cornerPairs.join(" ") : "(Selesai / Solved)",
+    edgeStory,
+    cornerStory,
+    hasParity: (edgeTargets.length % 2 !== 0)
   };
-}
-
-// ====================================================================
-// VISUALISATOR WARNA STANDAR WCA
-// ====================================================================
-const colorBgMap = {
-  0: 'bg-white border-gray-400',        // U (Putih)
-  1: 'bg-red-500 border-red-700',       // R (Merah)
-  2: 'bg-green-500 border-green-700',   // F (Hijau)
-  3: 'bg-yellow-400 border-yellow-600', // D (Kuning)
-  4: 'bg-orange-500 border-orange-700', // L (Oranye)
-  5: 'bg-blue-500 border-blue-700'      // B (Biru)
 };
 
-function CubeFaceGrid({ faceArray, startIdx, label }) {
-  const stickers = faceArray.slice(startIdx, startIdx + 9);
-  return (
-    <div className="flex flex-col items-center">
-      <span className="text-[10px] font-bold text-gray-500 mb-0.5">{label}</span>
-      <div className="grid grid-cols-3 gap-0.5 p-1 bg-gray-800 rounded border border-gray-700 shadow-inner">
-        {stickers.map((colorIdx, idx) => (
-          <div key={idx} className={`w-4 h-4 rounded-xs border ${colorBgMap[colorIdx]}`}></div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CubeVisualizer({ faces }) {
-  if (!faces || faces.length !== 54) return null;
-  return (
-    <div className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 my-2 flex flex-col items-center shadow-xs">
-      <div className="flex items-center gap-1 text-xs font-bold text-gray-700 mb-2">
-        <Eye className="w-4 h-4 text-blue-600" />
-        <span>Pratinjau Hasil Acakan (Standar WCA):</span>
-      </div>
-
-      <div className="flex flex-col items-center gap-1">
-        <CubeFaceGrid faceArray={faces} startIdx={0} label="U (Putih)" />
-        <div className="flex gap-1">
-          <CubeFaceGrid faceArray={faces} startIdx={36} label="L (Oranye)" />
-          <CubeFaceGrid faceArray={faces} startIdx={18} label="F (Hijau)" />
-          <CubeFaceGrid faceArray={faces} startIdx={9} label="R (Merah)" />
-          <CubeFaceGrid faceArray={faces} startIdx={45} label="B (Biru)" />
+// --- KOMPONEN VISUAL GRID SISI RUBIK 3x3 --- //
+const CubeFace3x3 = ({ label, colorClass, textColor = "text-white" }) => (
+  <div className="flex flex-col items-center gap-1">
+    <div className="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded-lg shadow-sm w-16 h-16 sm:w-20 sm:h-20">
+      {Array.from({ length: 9 }).map((_, i) => (
+        <div
+          key={i}
+          className={`${colorClass} rounded-[2px] flex items-center justify-center text-[10px] sm:text-xs font-black ${textColor}`}
+        >
+          {i === 4 ? label : ""}
         </div>
-        <CubeFaceGrid faceArray={faces} startIdx={27} label="D (Kuning)" />
-      </div>
+      ))}
     </div>
-  );
-}
+  </div>
+);
 
-// ====================================================================
-// APLIKASI UTAMA
-// ====================================================================
 export default function App() {
-  const [scramble, setScramble] = useState('');
+  const [scramble, setScramble] = useState(() => generateRandomScramble());
+  const [memoData, setMemoData] = useState(() => solveRealBLDMemo(scramble));
   const [showMemo, setShowMemo] = useState(true);
-  const [showPreview, setShowPreview] = useState(true);
-  const [memoData, setMemoData] = useState({
-    edgesText: '', cornersText: '', edgeStory: '', cornerStory: '', hasParity: false, faces: []
-  });
+  const [show2D, setShow2D] = useState(true);
+  const [showGuide, setShowGuide] = useState(false);
 
   const generateNewScramble = () => {
-    const moves = ["U", "D", "L", "R", "F", "B"];
-    const modifiers = ["", "'", "2"];
-    let newScramble = [], lastMove = "";
-
-    for (let i = 0; i < 18; i++) {
-      let move = moves[Math.floor(Math.random() * moves.length)];
-      while (move === lastMove) move = moves[Math.floor(Math.random() * moves.length)];
-      lastMove = move;
-      newScramble.push(move + modifiers[Math.floor(Math.random() * modifiers.length)]);
-    }
-
-    const scrText = newScramble.join(" ");
-    setScramble(scrText);
-    setMemoData(solveBLDMemo(scrText));
+    const newScramble = generateRandomScramble();
+    setScramble(newScramble);
+    setMemoData(solveRealBLDMemo(newScramble));
   };
 
   useEffect(() => {
-    generateNewScramble();
-  }, []);
+    if (scramble) {
+      setMemoData(solveRealBLDMemo(scramble));
+    }
+  }, [scramble]);
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 font-sans flex flex-col items-center">
+    <div className="min-h-screen bg-slate-50 text-gray-900 font-sans flex flex-col items-center">
+      
       {/* HEADER NAVY */}
-<header className="w-full bg-[#2b4cb8] text-white py-3 px-6 flex justify-between items-center shadow-sm">
-  <h1 className="text-xl font-bold tracking-tight">Memo Rubik BLD Shihwa</h1>
-  <div className="flex items-center gap-4">
-    <button className="hover:opacity-80 transition-opacity"><Info className="w-6 h-6" /></button>
-    <button className="hover:opacity-80 transition-opacity"><Settings className="w-6 h-6" /></button>
-  </div>
-</header>
+      <header className="w-full bg-[#2b4cb8] text-white py-3.5 px-6 flex justify-between items-center shadow-md">
+        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-yellow-300" /> Memo Rubik BLD Shihwa
+        </h1>
+        <div className="flex items-center gap-4">
+          <button className="hover:opacity-80 transition-opacity"><Info className="w-6 h-6" /></button>
+          <button className="hover:opacity-80 transition-opacity"><Settings className="w-6 h-6" /></button>
+        </div>
+      </header>
 
       {/* KONTEN UTAMA */}
-      <main className="w-full max-w-xl p-4 flex flex-col items-center gap-4 mt-1">
-        
+      <main className="w-full max-w-2xl p-4 flex flex-col items-center gap-5 mt-2">
+
         {/* PETUNJUK ORIENTASI */}
-        <div className="w-full bg-blue-50 border border-blue-200 text-blue-900 text-xs p-2.5 rounded text-center font-medium">
-          <strong>Orientasi Pegangan (WCA):</strong> Putih (Atas), Hijau (Depan), Kuning (Bawah), Biru (Belakang), Merah (Kanan), Oranye (Kiri).
+        <div className="w-full bg-yellow-50 border border-yellow-300 rounded-xl p-3 text-center text-xs text-yellow-950 shadow-xs">
+          <span className="font-bold text-yellow-900">Orientasi Pegangan:</span> Kuning (Atas / U), Merah (Depan / F), Putih (Bawah / D), Orange (Belakang / B), Hijau (Kanan / R), Biru (Kiri / L).
         </div>
 
-        {/* KOTAK SCRAMBLE */}
-        <div className="w-full text-center border-b border-gray-200 pb-3">
-          <p className="text-lg md:text-xl font-mono text-gray-800 font-medium leading-snug tracking-wide select-all">
+        {/* TEKS SCRAMBLE */}
+        <div className="w-full bg-white border border-gray-200 rounded-2xl p-5 shadow-sm text-center">
+          <p className="font-mono text-lg font-medium tracking-wide text-gray-800 leading-relaxed">
             {scramble}
           </p>
-          <div className="w-full h-0.5 bg-red-500 mt-2"></div>
         </div>
 
-        {/* TOMBOL ACTION */}
-        <div className="flex w-full gap-2">
+        {/* TOMBOL KONTROL */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full">
           <button 
             onClick={() => setShowMemo(!showMemo)}
-            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-3 rounded shadow-sm text-xs tracking-wider uppercase transition-colors"
+            className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-semibold text-gray-700 transition-colors cursor-pointer"
           >
-            {showMemo ? "HIDE MEMO" : "SOLVE"}
+            {showMemo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showMemo ? "HIDE MEMO" : "SHOW MEMO"}
           </button>
+
           <button 
-            onClick={() => setShowPreview(!showPreview)}
-            className="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold py-2 px-3 rounded shadow-sm text-xs tracking-wider uppercase transition-colors"
+            onClick={() => setShow2D(!show2D)}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
           >
-            {showPreview ? "HIDE 2D CUBE" : "SHOW 2D CUBE"}
+            <Box className="w-4 h-4" />
+            {show2D ? "HIDE 2D CUBE" : "SHOW 2D CUBE"}
           </button>
+
+          <button 
+            onClick={() => setShowGuide(!showGuide)}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+          >
+            <BookOpen className="w-4 h-4 text-amber-600" />
+            PANDUAN HURUF
+          </button>
+
           <button 
             onClick={generateNewScramble}
-            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-3 rounded shadow-sm text-xs tracking-wider uppercase transition-colors flex items-center justify-center gap-1"
+            className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5" /> SCRAMBLE
+            <RotateCcw className="w-4 h-4" /> SCRAMBLE
           </button>
         </div>
 
-        {/* PRATINJAU JARING-JARING RUBIK 2D */}
-        {showPreview && <CubeVisualizer faces={memoData.faces} />}
-
-        {/* TAMPILAN MEMO + CERITA TERPISAH */}
-        {showMemo && (
-          <div className="w-full space-y-4 text-center mt-1">
-            
-            {/* --- SEKSI EDGE --- */}
-            <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3 text-left space-y-2">
-              <div className="flex justify-between items-center border-b border-emerald-200 pb-1.5">
-                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                  1. Edge Targets & Kalimat
-                </span>
-                <span className="font-mono text-sm font-bold text-emerald-700">
-                  {memoData.edgesText}
-                </span>
-              </div>
-              <div 
-                className="text-xs md:text-sm text-gray-800 leading-relaxed pt-1"
-                dangerouslySetInnerHTML={{ __html: memoData.edgeStory }}
-              />
-            </div>
-
-            {/* --- SEKSI CORNER --- */}
-            <div className="bg-indigo-50/60 border border-indigo-200 rounded-lg p-3 text-left space-y-2">
-              <div className="flex justify-between items-center border-b border-indigo-200 pb-1.5">
-                <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                  2. Corner Targets & Kalimat
-                </span>
-                <span className="font-mono text-sm font-bold text-indigo-700">
-                  {memoData.cornersText}
-                </span>
-              </div>
-              <div 
-                className="text-xs md:text-sm text-gray-800 leading-relaxed pt-1"
-                dangerouslySetInnerHTML={{ __html: memoData.cornerStory }}
-              />
-            </div>
-
-            {/* PARITY STATUS */}
-            <div className="pt-1 text-center">
-              <h3 className="text-sm font-bold text-red-600 uppercase tracking-wide">
-                {memoData.hasParity ? '⚠️ ADA PARITY' : '✅ TIDAK ADA PARITY'}
+        {/* MODAL / PANEL PANDUAN PENAMAAN HURUF */}
+        {showGuide && (
+          <div className="w-full bg-white border border-amber-200 rounded-2xl p-4 shadow-sm flex flex-col gap-4 animate-in fade-in duration-200">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-amber-600" /> Keterangan Penamaan Huruf & Buffer Custom
               </h3>
+              <button 
+                onClick={() => setShowGuide(false)}
+                className="text-xs text-gray-500 hover:text-gray-800 font-bold px-2 py-0.5 bg-gray-100 rounded-lg cursor-pointer"
+              >
+                Tutup ✖
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              {/* TABEL EDGE */}
+              <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200">
+                <h4 className="font-bold text-emerald-800 mb-2 border-b border-emerald-300 pb-1">
+                  A. EDGE TARGETS <span className="text-[11px] font-normal block text-emerald-700">Buffer: Putih - Merah (DF)</span>
+                </h4>
+                <div className="max-h-60 overflow-y-auto pr-1">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-emerald-200 text-emerald-900 font-bold">
+                        <th className="pb-1">Sisi Stiker (Warna)</th>
+                        <th className="pb-1 text-center">Kode</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-emerald-100 text-gray-700">
+                      {EDGE_GUIDE_TABLE.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-emerald-100/50">
+                          <td className="py-1">{row.sticker}</td>
+                          <td className="py-1 text-center font-bold text-emerald-800">{row.code}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* TABEL CORNER */}
+              <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200">
+                <h4 className="font-bold text-indigo-800 mb-2 border-b border-indigo-300 pb-1">
+                  B. CORNER TARGETS <span className="text-[11px] font-normal block text-indigo-700">Buffer: Kuning - Oren - Biru (UBL)</span>
+                </h4>
+                <div className="max-h-60 overflow-y-auto pr-1">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-indigo-200 text-indigo-900 font-bold">
+                        <th className="pb-1">Sisi Stiker (Warna)</th>
+                        <th className="pb-1 text-center">Kode</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-indigo-100 text-gray-700">
+                      {CORNER_GUIDE_TABLE.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-indigo-100/50">
+                          <td className="py-1">{row.sticker}</td>
+                          <td className="py-1 text-center font-bold text-indigo-800">{row.code}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PRATINJAU JARING-JARING RUBIK 3x3 REALISTIS */}
+        {show2D && (
+          <div className="w-full bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col items-center gap-3">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+              <Box className="w-3.5 h-3.5" /> Pratinjau Posisi Muka (Jaring-Jaring 3x3)
+            </span>
+            
+            {/* JARING-JARING KUBUS REALISTIS */}
+            <div className="flex flex-col items-center gap-1 my-1">
+              {/* SISI ATAS (U: Kuning) */}
+              <div className="flex justify-center w-full">
+                <div className="w-16 sm:w-20"></div> {/* spacer */}
+                <CubeFace3x3 label="U" colorClass="bg-yellow-400" textColor="text-gray-900" />
+              </div>
+
+              {/* BARIS TENGAH: L (Biru), F (Merah), R (Hijau), B (Orange) */}
+              <div className="flex justify-center gap-1 w-full">
+                <CubeFace3x3 label="L" colorClass="bg-blue-600" />
+                <CubeFace3x3 label="F" colorClass="bg-red-600" />
+                <CubeFace3x3 label="R" colorClass="bg-green-600" />
+                <CubeFace3x3 label="B" colorClass="bg-orange-500" />
+              </div>
+
+              {/* SISI BAWAH (D: Putih) */}
+              <div className="flex justify-center w-full">
+                <div className="w-16 sm:w-20"></div> {/* spacer */}
+                <CubeFace3x3 label="D" colorClass="bg-white border border-gray-300" textColor="text-gray-900" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* HASIL MEMO & NARASI */}
+        {showMemo && memoData && (
+          <div className="w-full flex flex-col gap-4">
+            
+            {/* 1. EDGE TARGETS & KALIMAT */}
+            <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+              <div className="flex justify-between items-center border-b border-emerald-200/60 pb-2">
+                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600" /> 1. EDGE TARGETS & KALIMAT
+                </span>
+                <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-lg">
+                  {memoData.edgeTargetsStr}
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2 text-sm leading-relaxed text-gray-800 pt-1">
+                {memoData.edgeStory.map((item, idx) => (
+                  <React.Fragment key={idx}>
+                    <span className="bg-emerald-200/80 text-emerald-900 font-semibold px-2.5 py-1 rounded-lg border border-emerald-300/50 shadow-2xs">
+                      {item.word}
+                    </span>
+                    <span className="text-emerald-700 text-xs italic font-medium">
+                      🌸 {item.conn} 🌸
+                    </span>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. CORNER TARGETS & KALIMAT */}
+            <div className="bg-indigo-50/60 border border-indigo-200/80 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+              <div className="flex justify-between items-center border-b border-indigo-200/60 pb-2">
+                <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-indigo-600" /> 2. CORNER TARGETS & KALIMAT
+                </span>
+                <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-lg">
+                  {memoData.cornerTargetsStr}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-sm leading-relaxed text-gray-800 pt-1">
+                {memoData.cornerStory.map((item, idx) => (
+                  <React.Fragment key={idx}>
+                    <span className="bg-indigo-200/80 text-indigo-900 font-semibold px-2.5 py-1 rounded-lg border border-indigo-300/50 shadow-2xs">
+                      {item.word}
+                    </span>
+                    <span className="text-indigo-700 text-xs italic font-medium">
+                      ✨ {item.conn} ✨
+                    </span>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            {/* STATUS PARITY */}
+            <div className="flex justify-center mt-1">
+              {memoData.hasParity ? (
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" /> PARITY DETECTED
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> TIDAK ADA PARITY
+                </div>
+              )}
             </div>
 
           </div>
